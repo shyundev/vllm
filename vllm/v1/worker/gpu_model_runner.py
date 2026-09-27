@@ -3695,10 +3695,6 @@ class GPUModelRunner(
         discard_sampled_tokens_req_indices = np.nonzero(
             self.discard_request_mask.np[:num_reqs]
         )[0]
-        for i in discard_sampled_tokens_req_indices:
-            gen = self.input_batch.generators.get(int(i))
-            if gen is not None:
-                gen.set_offset(gen.get_offset() - 4)
 
         # Copy some objects so they don't get modified after returning.
         # This is important when using async scheduling.
@@ -4562,8 +4558,18 @@ class GPUModelRunner(
                 scheduler_output, grammar_output, self.input_batch, logits
             )
 
+        # Requests in discard_request_mask drop this step's sample, so their
+        # seeded generators must not advance.
+        num_reqs = self.input_batch.num_reqs
+        discarded_generator_states = [
+            (gen, gen.get_state())
+            for i in np.nonzero(self.discard_request_mask.np[:num_reqs])[0]
+            if (gen := self.input_batch.generators.get(int(i))) is not None
+        ]
         with record_function_or_nullcontext("gpu_model_runner: sample"):
             sampler_output = self._sample(logits, spec_decode_metadata)
+        for gen, state in discarded_generator_states:
+            gen.set_state(state)
 
         self._update_states_after_model_execute(
             sampler_output.sampled_token_ids, scheduler_output

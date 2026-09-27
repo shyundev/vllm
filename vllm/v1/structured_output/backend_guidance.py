@@ -161,6 +161,10 @@ class GuidanceGrammar(StructuredOutputGrammar):
         Returns True if the parser was advanced successfully.
         Returns False if the parser failed to advance.
         """
+        # An errored matcher also reports is_stopped() and masks to EOS only.
+        if self.ll_matcher.is_error():
+            return False
+
         if self.ll_tokenizer.eos_token in tokens:
             if self.ll_matcher.is_stopped() and not self.terminated:
                 self.rollback_lag = 1

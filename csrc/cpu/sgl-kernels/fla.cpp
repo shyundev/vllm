@@ -2294,15 +2294,18 @@ std::tuple<at::Tensor, at::Tensor> chunk_gated_delta_rule_cpu(
   constexpr int CHUNK_SIZE = 64;
 
   // prepare chunk indices
-  auto [chunk_indices, chunk_offsets] = prepare_chunk_indices<CHUNK_SIZE>(cu_seqlens);
+  at::Tensor chunk_indices, chunk_offsets;
+  std::tie(chunk_indices, chunk_offsets) = prepare_chunk_indices<CHUNK_SIZE>(cu_seqlens);
 
   float scale = 1.0 / std::sqrt(D);
-  auto [query_, key_] = use_qk_l2norm_in_kernel ? l2norm_fwd(query, key, eps) : std::make_tuple(query.mul(scale), key);
+  at::Tensor query_, key_;
+  std::tie(query_, key_) = use_qk_l2norm_in_kernel ? l2norm_fwd(query, key, eps) : std::make_tuple(query.mul(scale), key);
 
   auto g_ = chunk_local_cumsum<CHUNK_SIZE>(g, cu_seqlens, chunk_indices);
 
   // fused kkt + solve_tril + recompute_w_u
-  auto [w, u, decay_mask] =
+  at::Tensor w, u, decay_mask;
+  std::tie(w, u, decay_mask) =
       chunk_gated_delta_rule_fwd_intra<CHUNK_SIZE>(key_, value, g_, beta, cu_seqlens, chunk_indices);
 
   // fused `chunk_gated_delta_rule_fwd_h` + `chunk_fwd_o`
